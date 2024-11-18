@@ -1,8 +1,9 @@
-namespace youtubeApi.Model {
-
-    public class VideoItem {
-        public int id {get; set;}
-        public required string username {get; set;}
-        public required string video {get; set;}
+namespace youtubeApi.Model
+{
+    public class VideoItem
+    {
+        public required string Id { get; set; }  
+        public required string Username { get; set; }  
+        public required string Video { get; set; }  
     }
 }

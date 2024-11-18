@@ -27,6 +27,7 @@ builder.Services.AddCors(options =>
                          .AllowAnyHeader());
 });
 
+
 // Register CodeStore as a singleton
 builder.Services.AddSingleton<CodeStore>();
 
@@ -38,5 +39,6 @@ app.UseCors("AllowAllOrigins");
 
 // Map controllers
 app.MapControllers();
+
 
 app.Run();

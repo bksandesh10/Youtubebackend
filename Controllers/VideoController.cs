@@ -1,69 +1,95 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using youtubeApi.Model;
 using System.IO;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace youtubeApi.Controllers
+[Route("api/videos")]
+[ApiController]
+public class VideosController : ControllerBase
 {
-    [Route("video/[controller]")]
-    [ApiController]
-    public class UploadVideoController : ControllerBase
+    private readonly string _videoUploadPath = Path.Combine(Directory.GetCurrentDirectory(), "UploadedVideos");
+
+    public VideosController()
     {
-        private static readonly string UploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "Uploads");
-        private static readonly List<VideoItem> videoItems = new List<VideoItem>();
-        // private static readonly int currentId = 1;
-
-
-        [HttpPost] 
-        public IActionResult PostVideo([FromBody] VideoItem video) {
-
-            if(video == null) {
-                return BadRequest("video cannot be null");
-            }
-
-            if(video.id != 0 && videoItems.Any(u => u.id == video.id)) {
-                return BadRequest("Id already exits");
-            }
-
-              if (video.id == 0)
-            {
-                video.id = videoItems.Count != 0 ? videoItems.Max(i => i.id) + 1 : 1;
-            }
-
-            videoItems.Add(video);
-            return CreatedAtAction(nameof(PostVideo), new { Id = video.id }, video);
-
-
-        }
-
-         [HttpGet]
-        public IActionResult GetItems()
+        // Ensure the upload directory exists
+        if (!Directory.Exists(_videoUploadPath))
         {
-            var result = videoItems.Select(u => new
-            {
-                u.id,
-                u.username,
-                u.video
-              
-            });
+            Directory.CreateDirectory(_videoUploadPath);
+        }
+    }
 
-            return Ok(result);
+    [HttpPost("upload")]
+    public async Task<IActionResult> UploadVideo(IFormFile videoFile)
+    {
+        if (videoFile == null || videoFile.Length == 0)
+        {
+            return BadRequest(new { message = "No video file uploaded." });
         }
 
-       
-        // [HttpGet("{id}")]
-        // public IActionResult GetVideoById(int id)
-        // {
-        //     var video = videoItems.FirstOrDefault(v => v.id == id);
+        // Validate file extension (you can add more formats if needed)
+        var allowedExtensions = new[] { ".mp4", ".avi", ".mov", ".wmv" };
+        var extension = Path.GetExtension(videoFile.FileName).ToLowerInvariant();
+        if (!allowedExtensions.Contains(extension))
+        {
+            return BadRequest(new { message = "Invalid file type. Only video files are allowed." });
+        }
 
-        //     if (video == null)
-        //     {
-        //         return NotFound("Video not found.");
-        //     }
+        // Sanitize the filename
+        var sanitizedFileName = Path.GetFileNameWithoutExtension(videoFile.FileName) + extension;
+        var filePath = Path.Combine(_videoUploadPath, sanitizedFileName);
 
-        //     return Ok(video);
-        // }
+        // Ensure unique file name if the file already exists
+        int fileCount = 1;
+        while (System.IO.File.Exists(filePath))
+        {
+            sanitizedFileName = $"{Path.GetFileNameWithoutExtension(videoFile.FileName)}_{fileCount++}{extension}";
+            filePath = Path.Combine(_videoUploadPath, sanitizedFileName);
+        }
+
+        Console.WriteLine($"Uploading video to: {filePath}");
+
+        try
+        {
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await videoFile.CopyToAsync(stream);
+            }
+        }
+        catch (IOException ex)
+        {
+            Console.WriteLine($"Error uploading file: {ex.Message}");
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error uploading file." });
+        }
+
+        return Ok(new { message = "Video uploaded successfully.", fileName = sanitizedFileName });
+    }
+
+    [HttpGet]
+    public IActionResult GetVideos()
+    {
+        var files = Directory.GetFiles(_videoUploadPath)
+                             .Select(file => new
+                             {
+                                 FileName = Path.GetFileName(file),
+                                 DownloadUrl = Url.Action("GetVideo", new { fileName = Path.GetFileName(file) })
+                             })
+                             .ToList();
+
+        return Ok(files);
+    }
+
+    [HttpGet("download/{fileName}")]
+    public IActionResult GetVideo(string fileName)
+    {
+        var filePath = Path.Combine(_videoUploadPath, fileName);
+
+        if (!System.IO.File.Exists(filePath))
+        {
+            return NotFound(new { message = "Video not found." });
+        }
+
+        var fileBytes = System.IO.File.ReadAllBytes(filePath);
+        return File(fileBytes, "video/mp4", fileName);
     }
 }

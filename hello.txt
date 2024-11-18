@@ -1,0 +1,104 @@
+using Microsoft.AspNetCore.Mvc;
+using youtubeApi.Model;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
+
+namespace youtubeApi.Controllers
+{
+    [Route("video/[controller]")]
+    [ApiController]
+    public class UploadVideoController : ControllerBase
+    {
+        private static readonly List<VideoItem> videoItems = new List<VideoItem>();
+
+     
+// [HttpPost]
+// public IActionResult PostVideo([FromBody] VideoItem video) 
+// {
+//     if (video == null) 
+//     {
+//         return BadRequest("Video data cannot be null.");
+//     }
+
+//     if (string.IsNullOrEmpty(video.username) || string.IsNullOrEmpty(video.video))
+//     {
+//         return BadRequest("Username or video filename is missing.");
+//     }
+
+//     // Log the received data
+//     Console.WriteLine($"Received video: Username={video.username}, Video Filename={video.video}");
+
+//     // Process video item as usual
+//     if (video.id != 0 && videoItems.Any(u => u.id == video.id))
+//     {
+//         return BadRequest("Id already exists");
+//     }
+
+//     if (video.id == 0)
+//     {
+//         video.id = videoItems.Count != 0 ? videoItems.Max(i => i.id) + 1 : 1;
+//     }
+
+//     videoItems.Add(video);
+
+//     return CreatedAtAction(nameof(PostVideo), new { Id = video.id }, video);
+// }
+[HttpPost]
+public IActionResult PostVideo([FromForm] string username, [FromForm] IFormFile videoFile)
+{
+    if (string.IsNullOrEmpty(username) || videoFile == null)
+    {
+        return BadRequest("Username or video file is missing.");
+    }
+
+    // Log the received data
+    Console.WriteLine($"Received video: Username={username}, Video Filename={videoFile.FileName}");
+
+    // Create a unique filename for the video (optional step)
+    var fileName = Path.GetFileName(videoFile.FileName);
+    var filePath = Path.Combine("path/to/save", fileName); // Specify your folder path here
+
+    // Save the video to the server (optional step)
+    using (var stream = new FileStream(filePath, FileMode.Create))
+    {
+        videoFile.CopyTo(stream);
+    }
+
+    // Create a new VideoItem object to store in the list (if necessary)
+    var videoItem = new VideoItem
+    {
+        id = videoItems.Count != 0 ? videoItems.Max(i => i.id) + 1 : 1,
+        Username = username,
+        VideoFile = fileName,  // Store the file name (or file path) in the object
+    };
+
+    // Add the video item to the list
+    videoItems.Add(videoItem);
+
+    // Return a response with the video ID
+    return CreatedAtAction(nameof(PostVideo), new { Id = videoItem.id }, videoItem);
+}
+
+
+        [HttpGet]
+        public IActionResult GetItems()
+        {
+            var result = videoItems.Select(u => new
+            {
+                u.id,
+                u.Username,
+                u.VideoFile
+            });
+
+            return Ok(result);
+        }
+
+        // Helper method to validate URL format
+        private bool IsValidUrl(string url)
+        {
+            return Uri.TryCreate(url, UriKind.Absolute, out Uri? uriResult) &&
+                   (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
+        }
+    }
+}
